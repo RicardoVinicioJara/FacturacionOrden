@@ -1,0 +1,202 @@
+CREATE DATABASE "BaseMaquinasElectricas"
+    WITH 
+    OWNER = postgres
+    ENCODING = 'UTF8'
+    TABLESPACE = pg_default
+    CONNECTION LIMIT = -1;
+	
+	--- Clientes 
+	
+	CREATE TABLE public."Clientes"
+(
+    "cliId" numeric NOT NULL,
+    "cliNombre" text COLLATE pg_catalog."default" NOT NULL,
+    "cliApellido" text COLLATE pg_catalog."default" NOT NULL,
+    "cliCedula" text COLLATE pg_catalog."default" NOT NULL,
+    "cliTelefono" text COLLATE pg_catalog."default",
+    "cliDireccion" text COLLATE pg_catalog."default",
+    "cliCorreo" text COLLATE pg_catalog."default",
+    CONSTRAINT "Clientes_pkey" PRIMARY KEY ("cliId")
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."Clientes"
+    OWNER to postgres;
+	
+	
+	--Empelados 
+	
+	CREATE TABLE public."Empleados"
+(
+    "emId" numeric NOT NULL,
+    "emNombre" text COLLATE pg_catalog."default" NOT NULL,
+    "emApellido" text COLLATE pg_catalog."default" NOT NULL,
+    "emCedula" text COLLATE pg_catalog."default" NOT NULL,
+    "emTelefono" text COLLATE pg_catalog."default" NOT NULL,
+    "emCorreo" text COLLATE pg_catalog."default",
+    "emDireccion" text COLLATE pg_catalog."default",
+    CONSTRAINT "Empleados_pkey" PRIMARY KEY ("emId")
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."Empleados"
+    OWNER to postgres;
+	
+	--Producto
+	
+	CREATE TABLE public."Producto"
+(
+    "proId" numeric NOT NULL,
+    "proNombre" text COLLATE pg_catalog."default" NOT NULL,
+    "proCodigo" text COLLATE pg_catalog."default",
+    "proMedida" text COLLATE pg_catalog."default" NOT NULL,
+    "proStock" numeric NOT NULL,
+    "proPrecio" double precision NOT NULL,
+    CONSTRAINT "Producto_pkey" PRIMARY KEY ("proId")
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."Producto"
+    OWNER to postgres;
+	
+	--Trabajos
+	
+	CREATE TABLE public."Trabajos"
+(
+    "trabajosId" numeric NOT NULL,
+    "traNombre" text COLLATE pg_catalog."default" NOT NULL,
+    "traPrecio" double precision NOT NULL,
+    CONSTRAINT "Trabajos_pkey" PRIMARY KEY ("trabajosId")
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."Trabajos"
+    OWNER to postgres;
+	
+	--Orden Treabajo
+	CREATE TABLE public."OrdenTrabajo"
+(
+    "otId" numeric NOT NULL,
+    "otFechaIni" date,
+    "otCliente" numeric NOT NULL,
+    "otEmpleado" numeric NOT NULL,
+    "otTotal" double precision NOT NULL,
+    "otAbono" double precision NOT NULL,
+    "otSaldo" double precision NOT NULL,
+    "otObservaciones" text COLLATE pg_catalog."default",
+    "otCaracteristicas" text COLLATE pg_catalog."default" NOT NULL,
+    "otNumeroSerie" text COLLATE pg_catalog."default",
+    "otDesTrabajo" text COLLATE pg_catalog."default" NOT NULL,
+    "otFechaFin" date,
+    "otNotas" text COLLATE pg_catalog."default",
+    CONSTRAINT "OrdenTrabajo_pkey" PRIMARY KEY ("otId"),
+    CONSTRAINT "fkCliente" FOREIGN KEY ("otCliente")
+        REFERENCES public."Clientes" ("cliId") MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT "fkEmpleado" FOREIGN KEY ("otEmpleado")
+        REFERENCES public."Empleados" ("emId") MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."OrdenTrabajo"
+    OWNER to postgres;
+	
+	--Detalle
+	
+	CREATE TABLE public."Detalle"
+(
+    "deId" numeric NOT NULL,
+    "deProducto" numeric NOT NULL,
+    "deCantidad" numeric NOT NULL,
+    "deFactura" numeric NOT NULL,
+    CONSTRAINT "Detalle_pkey" PRIMARY KEY ("deId")
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."Detalle"
+    OWNER to postgres;
+	
+	--Bicakor
+	
+	CREATE TABLE public."BitacoraStock"
+(
+    "bitId" numeric NOT NULL,
+    "bitFecha" date NOT NULL,
+    "bitProducto" numeric NOT NULL,
+    "bitAccion" text COLLATE pg_catalog."default" NOT NULL,
+    "bitCant" numeric,
+    CONSTRAINT "BitacoraStock_pkey" PRIMARY KEY ("bitId"),
+    CONSTRAINT "forenProducto" FOREIGN KEY ("bitProducto")
+        REFERENCES public."Producto" ("proId") MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+WITH (
+    OIDS = FALSE
+)
+TABLESPACE pg_default;
+
+ALTER TABLE public."BitacoraStock"
+    OWNER to postgres;
+	
+	--Bitcora
+	
+	CREATE FUNCTION public.bitacora()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF 
+AS $BODY$
+    BEGIN
+        IF (TG_OP = 'UPDATE') THEN
+			if(old."proStock" < new."proStock") THEN
+            INSERT INTO public."BitacoraStock"("bitId", "bitFecha", "bitProducto", "bitAccion", "bitCant")
+			VALUES ((SELECT MAX("bitId") FROM Public."BitacoraStock")+1, current_timestamp, old."proId",'INGRESA MAS PRODUCTOS',new."proStock" - old."proStock");
+			ELSE 
+			INSERT INTO public."BitacoraStock"("bitId", "bitFecha", "bitProducto", "bitAccion", "bitCant")
+			VALUES ((SELECT MAX("bitId") FROM Public."BitacoraStock")+1, current_timestamp, old."proId",'SALEN PRODUCTOS',old."proStock" - new."proStock");
+            RETURN NEW;
+			END IF;
+        ELSEIF (TG_OP = 'INSERT') THEN
+            INSERT INTO public."BitacoraStock"("bitId", "bitFecha", "bitProducto", "bitAccion", "bitCant")
+			VALUES ((SELECT MAX("bitId") FROM Public."BitacoraStock")+1, current_timestamp, NEW."proId",'INGRESA NUEVOS PRODUCTOS',new."proStock" );
+        END IF;
+        RETURN NULL;
+    END;
+$BODY$;
+
+ALTER FUNCTION public.bitacora()
+
+
+    OWNER TO postgres;
+	
+	--Triger
+	
+	CREATE TRIGGER auditoria
+    AFTER INSERT OR UPDATE OF "proStock"
+    ON public."Producto"
+    FOR EACH ROW
+    EXECUTE PROCEDURE public.bitacora();
+	
+	
